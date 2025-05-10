@@ -1,0 +1,86 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        part: [OMICodingAssessment, frontend]
+
+    steps:
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Set up Java and Node.js environments
+      - name: Set up JDK 21 (Backend)
+        if: matrix.part == 'OMICodingAssessment'
+        uses: actions/setup-java@v3
+        with:
+          java-version: 21
+          distribution: 'temurin'
+
+      - name: Set up Node.js (Frontend)
+        if: matrix.part == 'country-flags-app'
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      # Run backend tests and build
+      - name: Run backend tests
+        if: matrix.part == 'OMICodingAssessment'
+        working-directory: ./OMICodingAssessment
+        run: mvn clean test
+
+      - name: Build backend
+        if: matrix.part == 'OMICodingAssessment'
+        working-directory: ./OMICodingAssessment
+        run: mvn clean package -DskipTests
+
+      # Run frontend tests and build
+      - name: Install frontend dependencies
+        if: matrix.part == 'country-flags-app'
+        working-directory: ./country-flags-app
+        run: npm install
+
+      - name: Build country-flags-app
+        if: matrix.part == 'country-flags-app'
+        working-directory: ./country-flags-app
+        run: npm run build -- --configuration=production
+
+  package:
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Package OMICodingAssessment
+        working-directory: ./OMICodingAssessment
+        run: mvn package -DskipTests
+
+      - name: Archive backend build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: OMICodingAssessment
+          path: OMICodingAssessment/target/*.jar
+
+      - name: Package country-flags-app
+        working-directory: ./country-flags-app
+        run: tar -czf dist.tar.gz dist/
+
+      - name: Archive frontend build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: country-flags-app
+          path: country-flags-app/dist.tar.gz
